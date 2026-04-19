@@ -17,13 +17,25 @@ import retrofit2.Response
 
 class LoginActivity : AppCompatActivity() {
 
-    // 注意：我刪除了這裡原本的 data class LoginRequest，因為它已經存在於 PlantApiService.kt 了
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 【功能 1：免重複登入檢查】
+        // 在載入佈局前先檢查是否已經有登入紀錄
+        val sharedPref = getSharedPreferences("PlantDoctor", Context.MODE_PRIVATE)
+        val isLoggedIn = sharedPref.getBoolean("is_logged_in", false)
+
+        if (isLoggedIn) {
+            // 如果已經登入，直接跳轉到主頁
+            val intent = Intent(this, HomeActivity::class.java)
+            startActivity(intent)
+            finish()
+            return // 結束 onCreate，不執行後續佈局
+        }
+
         setContentView(R.layout.activity_login)
 
-        // 1. 綁定 UI (確保 ID 與你的 activity_login.xml 一致)
+        // 1. 綁定 UI
         val etUsername = findViewById<EditText>(R.id.et_username)
         val etPassword = findViewById<EditText>(R.id.et_password)
         val btnLogin = findViewById<Button>(R.id.btn_login_submit)
@@ -39,10 +51,7 @@ class LoginActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // 建立 API 服務
             val apiService = PlantApiService.create()
-
-            // 這裡會自動使用 PlantApiService.kt 裡面定義的 LoginRequest
             val loginData = LoginRequest(username, password)
 
             apiService.login(loginData).enqueue(object : Callback<ResponseBody> {
@@ -51,24 +60,26 @@ class LoginActivity : AppCompatActivity() {
                         val responseBody = response.body()?.string()
                         val jsonObject = JSONObject(responseBody ?: "")
 
-                        // 取得 Token
+                        // 取得 Token 與其他用戶資訊
                         val token = jsonObject.optString("access_token")
+                        // 假設後端登入成功會回傳 email，若無，我們暫時存入帳號
+                        val email = jsonObject.optString("email") // 現在這行能抓到真正的 Email 了！
 
-                        // 儲存 Token (供之後上傳圖片使用)
-                        val sharedPref = getSharedPreferences("PlantDoctor", Context.MODE_PRIVATE)
+                        // 【功能 2：儲存登入狀態與個人資料】
                         with(sharedPref.edit()) {
-                            putString("token", "Bearer $token")
+                            putBoolean("is_logged_in", true)          // 記住已登入
+                            putString("token", "Bearer $token")       // 存 Token
+                            putString("username", username)           // 存帳號
+                            putString("email", email)                 // 存 Email
                             apply()
                         }
 
                         Toast.makeText(this@LoginActivity, "登入成功！", Toast.LENGTH_SHORT).show()
 
-                        // 跳轉到主頁
                         val intent = Intent(this@LoginActivity, HomeActivity::class.java)
                         startActivity(intent)
                         finish()
                     } else {
-                        // 伺服器回傳 400 或 500
                         val errorDetail = response.errorBody()?.string()
                         Log.e("LoginActivity", "Login Failed: $errorDetail")
                         Toast.makeText(this@LoginActivity, "登入失敗：帳號或密碼錯誤", Toast.LENGTH_SHORT).show()
@@ -76,14 +87,12 @@ class LoginActivity : AppCompatActivity() {
                 }
 
                 override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                    // 完全連不上伺服器 (IP 不對或沒開 host 0.0.0.0)
                     Log.e("LoginActivity", "Network Error: ${t.message}")
-                    Toast.makeText(this@LoginActivity, "連線失敗，請檢查電腦後端是否開啟", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@LoginActivity, "連線失敗，請檢查後端是否開啟", Toast.LENGTH_SHORT).show()
                 }
             })
         }
 
-        // 跳轉註冊
         tvRegister.setOnClickListener {
             val intent = Intent(this, RegisterActivity::class.java)
             startActivity(intent)
