@@ -16,7 +16,20 @@ data class RegisterRequest(
     val full_name: String,
     val role: String = "user"
 )
+// 放在專案中的 PlantApiService.kt
+data class DiaryResponse(
+    val status: String,
+    val count: Int,
+    val data: List<DiaryItem>
+)
 
+data class DiaryItem(
+    val id: Int,
+    val crop_name: String?,
+    val status_name: String,
+    val image_url: String,
+    val created_at: String
+)
 interface PlantApiService {
 
     // 1. 註冊帳戶
@@ -46,4 +59,9 @@ interface PlantApiService {
                 .create(PlantApiService::class.java)
         }
     }
+
+    @GET("diaries")
+    fun getDiaries(
+        @Header("Authorization") token: String
+    ): Call<DiaryResponse> // 這裡會自動解析成我們剛定義的 DiaryResponse
 }
